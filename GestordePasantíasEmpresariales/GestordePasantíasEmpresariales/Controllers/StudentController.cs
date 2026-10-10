@@ -1,8 +1,9 @@
 ﻿
-using Microsoft.AspNetCore.Mvc;
+using GestordePasantíasEmpresariales.Data;
 using GestordePasantíasEmpresariales.Models.Entities;
-using System.Linq;
+using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace GestordePasantíasEmpresariales.Controllers
 {
@@ -10,10 +11,8 @@ namespace GestordePasantíasEmpresariales.Controllers
     [Route("api/[controller]")]
     public class StudentController : ControllerBase
     {
-        private static readonly List<Student> _students = new List<Student>
-        {
-            
-        };
+        private List<Student> _students => InMemoryDataStore.Students;
+      
 
         // GET: api/Student
         [HttpGet]
