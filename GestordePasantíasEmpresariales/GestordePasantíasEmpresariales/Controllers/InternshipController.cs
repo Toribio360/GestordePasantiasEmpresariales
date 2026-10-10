@@ -128,7 +128,7 @@ namespace GestordePasantíasEmpresariales.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(
             int id,
-            CreateInternshipDto dto)
+            UpdateInternshipDto dto)
         {
             var existing = await _context.Internships
                 .FirstOrDefaultAsync(i => i.InternshipId == id);
@@ -160,6 +160,7 @@ namespace GestordePasantíasEmpresariales.Controllers
             existing.StartDate = dto.StartDate;
             existing.EndDate = dto.EndDate;
             existing.StudentId = dto.StudentId;
+            existing.IsActive = dto.IsActive;
 
             await _context.SaveChangesAsync();
 
