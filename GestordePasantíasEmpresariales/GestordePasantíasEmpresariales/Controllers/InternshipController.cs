@@ -1,11 +1,10 @@
 ﻿
-using Microsoft.AspNetCore.Mvc;
+
 using GestordePasantíasEmpresariales.Data;
 using GestordePasantíasEmpresariales.Models.Entities;
 using GestordePasantíasEmpresariales.Models.DTOs;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace GestordePasantíasEmpresariales.Controllers
 {
@@ -13,18 +12,20 @@ namespace GestordePasantíasEmpresariales.Controllers
     [Route("api/[controller]")]
     public class InternshipController : ControllerBase
     {
-        private readonly List<Internship> _internships =
-            InMemoryDataStore.Internships;
+        private readonly ApplicationDbContext _context;
 
-        private readonly List<Student> _students =
-            InMemoryDataStore.Students;
+        public InternshipController(ApplicationDbContext context)
+        {
+            _context = context;
+        }
 
         // GET: api/Internship
         [HttpGet]
-        public ActionResult<IEnumerable<InternshipResponseDto>> GetAll()
+        public async Task<ActionResult<IEnumerable<InternshipResponseDto>>> GetAll()
         {
-            var internships = _internships.Select(i =>
-                new InternshipResponseDto
+            var internships = await _context.Internships
+                .AsNoTracking()
+                .Select(i => new InternshipResponseDto
                 {
                     InternshipId = i.InternshipId,
                     Title = i.Title,
@@ -32,46 +33,52 @@ namespace GestordePasantíasEmpresariales.Controllers
                     StartDate = i.StartDate,
                     EndDate = i.EndDate,
                     StudentId = i.StudentId,
-                    StudentName = GetStudentName(i.StudentId)
-                }).ToList();
+                    StudentName = i.Student != null
+                        ? i.Student.Name + " " + i.Student.Lastname
+                        : string.Empty
+                })
+                .ToListAsync();
 
             return Ok(internships);
         }
 
         // GET: api/Internship/1
         [HttpGet("{id}")]
-        public ActionResult<InternshipResponseDto> GetById(int id)
+        public async Task<ActionResult<InternshipResponseDto>> GetById(int id)
         {
-            var internship = _internships
-                .FirstOrDefault(i => i.InternshipId == id);
+            var internship = await _context.Internships
+                .AsNoTracking()
+                .Where(i => i.InternshipId == id)
+                .Select(i => new InternshipResponseDto
+                {
+                    InternshipId = i.InternshipId,
+                    Title = i.Title,
+                    Description = i.Description,
+                    StartDate = i.StartDate,
+                    EndDate = i.EndDate,
+                    StudentId = i.StudentId,
+                    StudentName = i.Student != null
+                        ? i.Student.Name + " " + i.Student.Lastname
+                        : string.Empty
+                })
+                .FirstOrDefaultAsync();
 
             if (internship == null)
-            {
                 return NotFound();
-            }
 
-            return Ok(MapToResponse(internship));
+            return Ok(internship);
         }
 
         // POST: api/Internship
         [HttpPost]
-        public ActionResult<InternshipResponseDto> Create(
+        public async Task<ActionResult<InternshipResponseDto>> Create(
             CreateInternshipDto dto)
         {
-            if (dto == null)
-            {
-                return BadRequest("Internship data is required.");
-            }
-
             if (string.IsNullOrWhiteSpace(dto.Title))
-            {
                 return BadRequest("Title is required.");
-            }
 
             if (dto.StartDate == default)
-            {
                 return BadRequest("StartDate is required.");
-            }
 
             if (dto.EndDate.HasValue &&
                 dto.EndDate.Value < dto.StartDate)
@@ -80,34 +87,35 @@ namespace GestordePasantíasEmpresariales.Controllers
                     "EndDate cannot be earlier than StartDate.");
             }
 
-            var student = _students
-                .FirstOrDefault(s => s.StudentId == dto.StudentId);
+            var student = await _context.Students
+                .FirstOrDefaultAsync(s => s.StudentId == dto.StudentId);
 
             if (student == null)
-            {
-                return BadRequest(
-                    "The specified student does not exist.");
-            }
-
-            int newId = _internships.Any()
-                ? _internships.Max(i => i.InternshipId) + 1
-                : 1;
+                return BadRequest("The specified student does not exist.");
 
             var internship = new Internship
             {
-                InternshipId = newId,
                 Title = dto.Title,
                 Description = dto.Description,
                 StartDate = dto.StartDate,
                 EndDate = dto.EndDate,
                 StudentId = dto.StudentId,
-                Student = student,
                 IsActive = true
             };
 
-            _internships.Add(internship);
+            _context.Internships.Add(internship);
+            await _context.SaveChangesAsync();
 
-            var response = MapToResponse(internship);
+            var response = new InternshipResponseDto
+            {
+                InternshipId = internship.InternshipId,
+                Title = internship.Title,
+                Description = internship.Description,
+                StartDate = internship.StartDate,
+                EndDate = internship.EndDate,
+                StudentId = internship.StudentId,
+                StudentName = $"{student.Name} {student.Lastname}"
+            };
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -118,32 +126,21 @@ namespace GestordePasantíasEmpresariales.Controllers
 
         // PUT: api/Internship/1
         [HttpPut("{id}")]
-        public IActionResult Update(
+        public async Task<IActionResult> Update(
             int id,
             CreateInternshipDto dto)
         {
-            if (dto == null)
-            {
-                return BadRequest("Internship data is required.");
-            }
-
-            var existing = _internships
-                .FirstOrDefault(i => i.InternshipId == id);
+            var existing = await _context.Internships
+                .FirstOrDefaultAsync(i => i.InternshipId == id);
 
             if (existing == null)
-            {
                 return NotFound();
-            }
 
             if (string.IsNullOrWhiteSpace(dto.Title))
-            {
                 return BadRequest("Title is required.");
-            }
 
             if (dto.StartDate == default)
-            {
                 return BadRequest("StartDate is required.");
-            }
 
             if (dto.EndDate.HasValue &&
                 dto.EndDate.Value < dto.StartDate)
@@ -152,66 +149,37 @@ namespace GestordePasantíasEmpresariales.Controllers
                     "EndDate cannot be earlier than StartDate.");
             }
 
-            var student = _students
-                .FirstOrDefault(s => s.StudentId == dto.StudentId);
+            var studentExists = await _context.Students
+                .AnyAsync(s => s.StudentId == dto.StudentId);
 
-            if (student == null)
-            {
-                return BadRequest(
-                    "The specified student does not exist.");
-            }
+            if (!studentExists)
+                return BadRequest("The specified student does not exist.");
 
             existing.Title = dto.Title;
             existing.Description = dto.Description;
             existing.StartDate = dto.StartDate;
             existing.EndDate = dto.EndDate;
             existing.StudentId = dto.StudentId;
-            existing.Student = student;
+
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
 
         // DELETE: api/Internship/1
         [HttpDelete("{id}")]
-        public IActionResult Delete(int id)
+        public async Task<IActionResult> Delete(int id)
         {
-            var existing = _internships
-                .FirstOrDefault(i => i.InternshipId == id);
+            var existing = await _context.Internships
+                .FirstOrDefaultAsync(i => i.InternshipId == id);
 
             if (existing == null)
-            {
                 return NotFound();
-            }
 
-            _internships.Remove(existing);
+            _context.Internships.Remove(existing);
+            await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        // Convertir entidad a DTO de respuesta
-        private InternshipResponseDto MapToResponse(
-            Internship internship)
-        {
-            return new InternshipResponseDto
-            {
-                InternshipId = internship.InternshipId,
-                Title = internship.Title,
-                Description = internship.Description,
-                StartDate = internship.StartDate,
-                EndDate = internship.EndDate,
-                StudentId = internship.StudentId,
-                StudentName = GetStudentName(internship.StudentId)
-            };
-        }
-
-        private string GetStudentName(int studentId)
-        {
-            var student = _students
-                .FirstOrDefault(s => s.StudentId == studentId);
-
-            return student == null
-                ? string.Empty
-                : $"{student.Name} {student.Lastname}";
         }
     }
 }
