@@ -12,5 +12,8 @@
         public string Adress { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
 
+        public ICollection<Internship> Internships { get; set; }
+         = new List<Internship>();
+
     }
 }
