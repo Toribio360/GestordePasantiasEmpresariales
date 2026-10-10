@@ -1,6 +1,8 @@
 ﻿
+
 using GestordePasantíasEmpresariales.Data;
 using GestordePasantíasEmpresariales.Models.Entities;
+using GestordePasantíasEmpresariales.Models.ModelsDTOS;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,10 +21,20 @@ namespace GestordePasantíasEmpresariales.Controllers
 
         // GET: api/Student
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Student>>> GetAll()
+        public async Task<ActionResult<IEnumerable<StudentResponseDto>>> GetAll()
         {
             var students = await _context.Students
                 .AsNoTracking()
+                .Select(s => new StudentResponseDto
+                {
+                    StudentId = s.StudentId,
+                    Name = s.Name,
+                    Lastname = s.Lastname,
+                    Email = s.Email,
+                    PhoneNumber = s.PhoneNumber,
+                    Address = s.Address,
+                    IsActive = s.IsActive
+                })
                 .ToListAsync();
 
             return Ok(students);
@@ -30,10 +42,22 @@ namespace GestordePasantíasEmpresariales.Controllers
 
         // GET: api/Student/1
         [HttpGet("{id}")]
-        public async Task<ActionResult<Student>> GetById(int id)
+        public async Task<ActionResult<StudentResponseDto>> GetById(int id)
         {
             var student = await _context.Students
-                .FirstOrDefaultAsync(s => s.StudentId == id);
+                .AsNoTracking()
+                .Where(s => s.StudentId == id)
+                .Select(s => new StudentResponseDto
+                {
+                    StudentId = s.StudentId,
+                    Name = s.Name,
+                    Lastname = s.Lastname,
+                    Email = s.Email,
+                    PhoneNumber = s.PhoneNumber,
+                    Address = s.Address,
+                    IsActive = s.IsActive
+                })
+                .FirstOrDefaultAsync();
 
             if (student == null)
                 return NotFound();
@@ -43,28 +67,37 @@ namespace GestordePasantíasEmpresariales.Controllers
 
         // POST: api/Student
         [HttpPost]
-        public async Task<ActionResult<Student>> Create(Student student)
+        public async Task<ActionResult<StudentResponseDto>> Create(
+            CreateStudentDto dto)
         {
-            if (string.IsNullOrWhiteSpace(student.Name) ||
-                string.IsNullOrWhiteSpace(student.Lastname))
+            var student = new Student
             {
-                return BadRequest(
-                    "Name and Lastname are required."
-                );
-            }
-
-            // SQL Server generará el StudentId automáticamente
-            student.StudentId = 0;
-            student.IsActive = true;
+                Name = dto.Name,
+                Lastname = dto.Lastname,
+                Email = dto.Email,
+                PhoneNumber = dto.PhoneNumber,
+                Address = dto.Address,
+                IsActive = true
+            };
 
             _context.Students.Add(student);
-
             await _context.SaveChangesAsync();
+
+            var response = new StudentResponseDto
+            {
+                StudentId = student.StudentId,
+                Name = student.Name,
+                Lastname = student.Lastname,
+                Email = student.Email,
+                PhoneNumber = student.PhoneNumber,
+                Address = student.Address,
+                IsActive = student.IsActive
+            };
 
             return CreatedAtAction(
                 nameof(GetById),
                 new { id = student.StudentId },
-                student
+                response
             );
         }
 
@@ -72,27 +105,20 @@ namespace GestordePasantíasEmpresariales.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(
             int id,
-            Student student)
+            UpdateStudentDto dto)
         {
-            if (string.IsNullOrWhiteSpace(student.Name) ||
-                string.IsNullOrWhiteSpace(student.Lastname))
-            {
-                return BadRequest(
-                    "Name and Lastname are required."
-                );
-            }
-
             var existing = await _context.Students
                 .FirstOrDefaultAsync(s => s.StudentId == id);
 
             if (existing == null)
                 return NotFound();
 
-            existing.Name = student.Name;
-            existing.Lastname = student.Lastname;
-            existing.Email = student.Email;
-            existing.PhoneNumber = student.PhoneNumber;
-            existing.IsActive = student.IsActive;
+            existing.Name = dto.Name;
+            existing.Lastname = dto.Lastname;
+            existing.Email = dto.Email;
+            existing.PhoneNumber = dto.PhoneNumber;
+            existing.Address = dto.Address;
+            existing.IsActive = dto.IsActive;
 
             await _context.SaveChangesAsync();
 
@@ -110,7 +136,6 @@ namespace GestordePasantíasEmpresariales.Controllers
                 return NotFound();
 
             _context.Students.Remove(existing);
-
             await _context.SaveChangesAsync();
 
             return NoContent();
