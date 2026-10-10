@@ -9,7 +9,7 @@
         public string PhoneNumber { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
 
-        public string Adress { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
 
         public ICollection<Internship> Internships { get; set; }
